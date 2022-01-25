@@ -1,64 +1,29 @@
 import './App.css';
 
-import React, { useEffect,  useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
-import { OrbitControls, PerspectiveCamera, Box, Plane, } from "@react-three/drei";
+import { OrbitControls, PerspectiveCamera, Plane, } from "@react-three/drei";
 import { DoubleSide } from "three";
 
-const Scene = () => {
-  const boxRef = useRef();
-  useFrame(() => {
-    boxRef.current.rotation.y += 0.004;
-    boxRef.current.rotation.x += 0.004;
-    boxRef.current.rotation.z += 0.004;
-  });
-  // Set receiveShadow on any mesh that should be in shadow,
-  // and castShadow on any mesh that should create a shadow.
-  return (
-    <group>
-      <Box castShadow receiveShadow ref={boxRef} position={[0, 0.5, 0]}>
-        <meshStandardMaterial attach="material" color="white" />
-      </Box>
-      <Plane
-        receiveShadow
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, -1, 0]}
-        args={[1000, 1000]}
-      >
-        <meshStandardMaterial attach="material" color="white" />
-      </Plane>
-    </group>
-  );
-};
-
 const Background = () => {
-  const { gl, scene } = useThree();
+  const { gl } = useThree();
+
   gl.setClearColor(0x87ceeb, 1);
-  // const loader = new CubeTextureLoader();
-  // const texture = loader.load([
-  //   '/1.jpg',
-  //   '/2.jpg',
-  //   '/3.jpg',
-  //   '/4.jpg',
-  //   '/5.jpg',
-  //   '/6.jpg',
-  // ]);
-  // scene.background = texture;
   return null
 }
 
-function App() {
-  const geoTarget = useRef();
-  useEffect(() => {
-    if (!geoTarget.current) {
-      return;
-    }
-    // debugger
-    // let box = geoTarget.current.computeBouningBox();
-    // debugger
+const Map = () => {
+  let mapRef = useRef();
+  useFrame(({ clock }) => {
+    mapRef.current.rotation.y = (clock.getElapsedTime() / 12);
   })
 
-
+  let meshSizeW = 600;
+  let meshSizeH = 600;
+  const [gridH, setGridH] = useState(7);
+  const [gridW, setGridW] = useState(7);
+  const [smoothness, setSmoothness] = useState(15);
+  const [elevation, setElevation] = useState(1.15);
 
   const makeGrid = (width, height) => {
     let grid = [];
@@ -75,14 +40,11 @@ function App() {
     return (grid);
   }
 
-  let grid = makeGrid(6, 6);
+  let grid = makeGrid(gridW, gridH);
 
   const makeNoise = (gradientGrid, targetW, targetH, elev, smoothCoeff) => {
-    let gridH = gradientGrid.length;
     let squareH = targetH / (gridH - 1);    // Т.к. 2 ряда сетки образуют один квадрат
     let stepH = squareH / smoothCoeff;
-
-    let gridW = gradientGrid[0].length;
     let squareW = targetW / (gridW - 1);
     let stepW = squareW / smoothCoeff;
 
@@ -130,12 +92,7 @@ function App() {
     return { noise, stepW, stepH }
   }
 
-  let meshSizeW = 160;
-  let meshSizeH = 160;
-  let elevation = 1.5;
-  let smmoothness = 6;
-
-  let { noise, stepW, stepH } = makeNoise(grid, meshSizeW, meshSizeH, elevation, smmoothness);
+  let { noise, stepW, stepH } = makeNoise(grid, meshSizeW, meshSizeH, elevation, smoothness);
 
   let rows = noise.length;
   let colums = noise[0].length;
@@ -144,46 +101,65 @@ function App() {
   for (let row = 0; row < rows - 1; row++) {
     for (let column = 0; column < colums - 1; column++) {
       // Верхняя левая
-      vertices.push(row * stepH);
+      vertices.push(row * stepH - meshSizeH / 2);
       vertices.push(noise[row][column]);
-      vertices.push(column * stepW);
+      vertices.push(column * stepW - meshSizeW / 2);
       // Верхняя правая
-      vertices.push(row * stepH);
+      vertices.push(row * stepH - meshSizeH / 2);
       vertices.push(noise[row][column + 1]);
-      vertices.push((column + 1) * stepW);
+      vertices.push((column + 1) * stepW - meshSizeW / 2);
       // Нижняя
-      vertices.push((row + 1) * stepH);
+      vertices.push((row + 1) * stepH - meshSizeH / 2);
       vertices.push(noise[row + 1][column]);
-      vertices.push(column * stepW);
+      vertices.push(column * stepW - meshSizeW / 2);
 
       // Верхняя
-      vertices.push(row * stepH);
+      vertices.push(row * stepH - meshSizeH / 2);
       vertices.push(noise[row][column + 1]);
-      vertices.push((column + 1) * stepW);
+      vertices.push((column + 1) * stepW - meshSizeH / 2);
       // Нижняя правая
-      vertices.push((row + 1) * stepH);
+      vertices.push((row + 1) * stepH - meshSizeH / 2);
       vertices.push(noise[row + 1][column + 1]);
-      vertices.push((column + 1) * stepW);
+      vertices.push((column + 1) * stepW - meshSizeW / 2);
       // Нижняя левая
-      vertices.push((row + 1) * stepH);
+      vertices.push((row + 1) * stepH - meshSizeH / 2);
       vertices.push(noise[row + 1][column]);
-      vertices.push(column * stepW);
+      vertices.push(column * stepW - meshSizeW / 2);
     }
   }
-
   vertices = new Float32Array(vertices);
+  return (
+    <mesh ref={mapRef} castShadow receiveShadow>
+      <bufferGeometry receiveShadow castShadow>
+        <bufferAttribute
+          attachObject={["attributes", "position"]}
+          array={vertices}
+          itemSize={3}
+          count={vertices.length}
+          receiveShadow
+          castShadow
+          needsUpdate={true}
+        />
+      </bufferGeometry>
+      <meshBasicMaterial attach='material' color="#3f9b0b" side={DoubleSide} receiveShadow castShadow />
+    </mesh>
+  )
+}
+
+
+function App() {
 
   return (
-    <div className="App">
+    <div className="App" style={{ overflow: 'hidden' }}>
       <Canvas
         style={{ width: '100%', height: document.body.clientHeight, border: '1px solid black' }}
         colorManagement
         shadowMap
-        camera={{ position: [40, 40, 80], rotation: [-Math.PI / 5, 0, 0], fov: 90 }}
+        camera={{ position: [80, 90, 70], rotation: [-Math.PI / 6, 0, 0], fov: 80 }}
       >
-        <fog attach="fog" args={["white", 1, 200]} />
+        {/* Туман и освещение */}
+        {/* <fog attach="fog" args={["white", 1, 350]} /> */}
         <ambientLight intensity={0.1} />
-
         <directionalLight
           intensity={0.5}
           castShadow
@@ -192,47 +168,24 @@ function App() {
         />
 
         {/* Поверхность */}
-        <mesh position={[-meshSizeW / 2, 0, -meshSizeH / 2]} castShadow receiveShadow>
-          <bufferGeometry ref={geoTarget} receiveShadow castShadow>
-            <bufferAttribute
-              attachObject={["attributes", "position"]}
-              array={vertices}
-              itemSize={3}
-              count={vertices.length}
-              receiveShadow
-              castShadow
-            />
-          </bufferGeometry>
-          <meshBasicMaterial attach='material' color="#3f9b0b" side={DoubleSide} receiveShadow castShadow />
-        </mesh>
-        {/* Сетка */}
-        <gridHelper scale={10} />
+        <Map />
         {/* Поверхность воды */}
-          <Plane
-            receiveShadow
-            rotation={[-Math.PI / 2, 0, 0]}
-            position={[0, -1, 0]}
-            args={[1000, 1000]}
-          >
-            <meshStandardMaterial attach="material" color="#00ffff" />
-          </Plane>
-        
-
-        <PerspectiveCamera/>
+        <Plane
+          receiveShadow
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, -1, 0]}
+          args={[2000, 2000]}
+        >
+          <meshStandardMaterial attach="material" color="#00ffff" />
+        </Plane>
+        {/* Камера */}
+        <PerspectiveCamera />
         <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 1.75} />
         <Background />
       </Canvas>
-
-      <form >
-        <label>
-          Коэффициент сглаживания:
-          <input type='number' name='smoothness' min={1} />
-        </label>
-        <input type='submit' value="Применить" onClick={() => alert('clicked')} />
-      </form>
       <header className="App-header">
         <p>
-          Edit <code>src/App.js</code> and save to reload.
+          Динамический скринсейвер "Природный ландшафт" на основе шума перлина
         </p>
       </header>
     </div>
